@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: "chenjingdev/optiview의 태그 (예: v1.0.2). package.json 판과 같아야 한다"
+        description: "chenjingdev/optiview의 태그 (예: v1.0.2). package.json 판과 같아야 한다. 연습 모드에서는 main 같은 브랜치도 된다"
         required: true
         type: string
       notes:
@@ -53,8 +53,12 @@ jobs:
           VERSION=$(node -p "require('./package.json').version")
           CORE=$(sed -n "s/^export const VERSION = '\(.*\)';/\1/p" core/config.mjs)
           echo "package.json $VERSION, core/config.mjs $CORE, ref $REF"
-          if [ "v$VERSION" != "$REF" ] || [ "$VERSION" != "$CORE" ]; then
-            echo "::error::태그($REF), package.json($VERSION), core/config.mjs($CORE) 판이 서로 다르다"
+          if [ "$VERSION" != "$CORE" ]; then
+            echo "::error::package.json($VERSION)과 core/config.mjs($CORE) 판이 다르다"
+            exit 1
+          fi
+          if [ "$DRY_RUN" != "true" ] && [ "v$VERSION" != "$REF" ]; then
+            echo "::error::태그($REF)가 판(v$VERSION)과 다르다"
             exit 1
           fi
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
