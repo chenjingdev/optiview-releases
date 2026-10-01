@@ -1,0 +1,104 @@
+# OptiView 릴리스: 비공개 코드 저장소(chenjingdev/optiview)의 태그를 받아 빌드·서명·공증하고, 이 저장소에 릴리스를 올린다.
+# 코드는 이 저장소에 남지 않는다. 러너가 끝나면 받아 온 코드와 서명 키도 함께 사라진다.
+# 실행: gh workflow run release.yml -R chenjingdev/optiview-releases -f ref=v1.2.3 -f notes="바뀐 점"
+# 이 저장소에 쓰기 권한이 있는 사람만 실행할 수 있다(workflow_dispatch만 받는다. PR로는 돌지 않는다).
+name: release
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "chenjingdev/optiview의 태그 (예: v1.0.2). package.json 판과 같아야 한다"
+        required: true
+        type: string
+      notes:
+        description: "릴리스 설명"
+        required: false
+        type: string
+        default: ""
+      dry_run:
+        description: "빌드·공증만 하고 릴리스는 올리지 않는다"
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      REF: ${{ inputs.ref }}
+      NOTES: ${{ inputs.notes }}
+      DRY_RUN: ${{ inputs.dry_run }}
+    steps:
+      - name: 코드 받기 (비공개 저장소, 읽기 전용 배포 키)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: chenjingdev/optiview
+          ref: ${{ inputs.ref }}
+          ssh-key: ${{ secrets.CODE_DEPLOY_KEY }}
+          persist-credentials: false
+          path: src
+
+      - name: 판 확인
+        working-directory: src
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          CORE=$(sed -n "s/^export const VERSION = '\(.*\)';/\1/p" core/config.mjs)
+          echo "package.json $VERSION, core/config.mjs $CORE, ref $REF"
+          if [ "v$VERSION" != "$REF" ] || [ "$VERSION" != "$CORE" ]; then
+            echo "::error::태그($REF), package.json($VERSION), core/config.mjs($CORE) 판이 서로 다르다"
+            exit 1
+          fi
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: src/package-lock.json
+
+      - name: 설치
+        working-directory: src
+        run: npm ci
+
+      - name: 빌드·서명·공증
+        working-directory: src
+        env:
+          CSC_LINK: ${{ secrets.MAC_CERT_P12 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          export APPLE_API_KEY="$RUNNER_TEMP/notary.p8"
+          printf '%s' "$APPLE_API_KEY_P8" > "$APPLE_API_KEY"
+          npx electron-builder --mac --arm64 --publish never
+          rm -f "$APPLE_API_KEY"
+
+      - name: 공증 확인
+        working-directory: src
+        run: |
+          xcrun stapler validate dist/mac-arm64/OptiView.app
+          spctl -a -vv -t exec dist/mac-arm64/OptiView.app 2>&1 | tee spctl.txt
+          grep -q "source=Notarized Developer ID" spctl.txt || { echo "::error::공증되지 않은 앱이다"; exit 1; }
+          ls -la dist
+
+      - name: 릴리스 올리기
+        if: ${{ !inputs.dry_run }}
+        working-directory: src/dist
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$REF" \
+            "OptiView-$VERSION-arm64.dmg" "OptiView-$VERSION-arm64.dmg.blockmap" \
+            "OptiView-$VERSION-arm64-mac.zip" "OptiView-$VERSION-arm64-mac.zip.blockmap" \
+            latest-mac.yml \
+            --repo "$GITHUB_REPOSITORY" --title "OptiView $VERSION" --notes "$NOTES" --latest
