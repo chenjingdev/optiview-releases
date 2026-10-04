@@ -1,4 +1,4 @@
-# OptiView 릴리스: 비공개 코드 저장소(chenjingdev/optiview)의 태그를 받아 빌드·서명·공증하고, 이 저장소에 릴리스를 올린다.
+# OptiView 릴리스: 비공개 코드 저장소(chenjingdev-secret/optiview)의 태그를 받아 빌드·서명·공증하고, 이 저장소에 릴리스를 올린다.
 # 코드는 이 저장소에 남지 않는다. 러너가 끝나면 받아 온 코드와 서명 키도 함께 사라진다.
 # 실행: gh workflow run release.yml -R chenjingdev/optiview-releases -f ref=v1.2.3 -f notes="바뀐 점"
 # 이 저장소에 쓰기 권한이 있는 사람만 실행할 수 있다(workflow_dispatch만 받는다. PR로는 돌지 않는다).
@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: "chenjingdev/optiview의 태그 (예: v1.0.2). package.json 판과 같아야 한다. 연습 모드에서는 main 같은 브랜치도 된다"
+        description: "chenjingdev-secret/optiview의 태그 (예: v1.0.2). package.json 판과 같아야 한다. 연습 모드에서는 main 같은 브랜치도 된다"
         required: true
         type: string
       notes:
@@ -41,7 +41,7 @@ jobs:
       - name: 코드 받기 (비공개 저장소, 읽기 전용 배포 키)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          repository: chenjingdev/optiview
+          repository: chenjingdev-secret/optiview
           ref: ${{ inputs.ref }}
           ssh-key: ${{ secrets.CODE_DEPLOY_KEY }}
           persist-credentials: false
