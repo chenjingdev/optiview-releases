@@ -38,12 +38,12 @@ jobs:
       NOTES: ${{ inputs.notes }}
       DRY_RUN: ${{ inputs.dry_run }}
     steps:
-      - name: 코드 받기 (비공개 저장소, 읽기 전용 배포 키)
+      - name: 코드 받기 (비공개 저장소, 읽기 전용 토큰)
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: chenjingdev-secret/optiview
           ref: ${{ inputs.ref }}
-          ssh-key: ${{ secrets.CODE_DEPLOY_KEY }}
+          token: ${{ secrets.CODE_READ_TOKEN }}
           persist-credentials: false
           path: src
 
